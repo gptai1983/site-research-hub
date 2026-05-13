@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+env:
+  JWT_SECRET: ci-test-secret-do-not-use
+  DB_PATH: /tmp/ci-test.db
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+
+      # Backend
+      - name: Install backend deps
+        run: npm ci
+
+      - name: TypeScript check (backend)
+        run: npx tsc --noEmit
+
+      - name: Run API tests
+        run: npm test
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY || '' }}
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY || '' }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || '' }}
+
+      # Frontend
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: TypeScript check (frontend)
+        working-directory: frontend
+        run: npx tsc --noEmit
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Run frontend tests
+        working-directory: frontend
+        run: npx vitest run
+
+      # Browser smoke test (with JWT auth)
+      - name: Install Playwright browsers
+        run: npx playwright install chromium
+
+      - name: Browser smoke test
+        run: |
+          npx tsx src/index.ts &
+          sleep 5
+
+          # Health check
+          curl -f http://localhost:3000/health
+
+          # Create first user and get token
+          TOKEN=$(curl -s -X POST http://localhost:3000/trpc/auth.setupFirstUser \
+            -H 'Content-Type: application/json' \
+            -d '{"email":"ci@test.dev","password":"cipass123"}' \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['result']['data']['token'])")
+
+          # Test authenticated endpoint
+          curl -f -s -X POST http://localhost:3000/trpc/browser.navigate \
+            -H 'Content-Type: application/json' \
+            -H "Authorization: Bearer $TOKEN" \
+            -d '{"url":"https://example.com"}'
+
+          # Verify unauthenticated request is rejected
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST http://localhost:3000/trpc/profiles.create \
+            -H 'Content-Type: application/json' \
+            -d '{"name":"x","url":"https://x.com"}')
+          if [ "$STATUS" != "401" ]; then
+            echo "ERROR: Unauthenticated request should return 401, got $STATUS"
+            exit 1
+          fi
+
+          kill %1
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY || '' }}
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY || '' }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || '' }}

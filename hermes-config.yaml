@@ -1,0 +1,48 @@
+# Hermes Agent Configuration
+# Place this file at ~/.hermes/config.yaml
+
+providers:
+  groq:
+    type: openai_compatible
+    base_url: "https://api.groq.com/openai/v1"
+    api_key: "${GROQ_API_KEY}"
+    models:
+      - name: "llama-3.3-70b-versatile"
+        context_window: 128000
+      - name: "llama-3.1-8b-instant"
+        context_window: 128000
+
+  opencode-zen:
+    type: openai_compatible
+    base_url: "https://opencode.ai/zen/v1"
+    api_key: "${OPENCODE_API_KEY}"
+    models:
+      - name: "big-pickle"
+        context_window: 128000
+      - name: "minimax-m2.5-free"
+        context_window: 128000
+
+  gemini:
+    type: openai_compatible
+    base_url: "https://generativelanguage.googleapis.com/v1beta/openai/"
+    api_key: "${GEMINI_API_KEY}"
+    models:
+      - name: "gemini-1.5-flash"
+        context_window: 128000
+
+routing:
+  enabled: true
+  fallback_chain:
+    - provider: "groq"
+    - provider: "opencode-zen"
+    - provider: "gemini"
+  rules:
+    - if: "contains('код') OR contains('python') OR contains('js')"
+      use: "opencode-zen/big-pickle"
+    - if: "contains('картинка') OR contains('скриншот') OR contains('image')"
+      use: "gemini/gemini-1.5-flash"
+    - default:
+      use: "groq/llama-3.3-70b-versatile"
+
+default_provider: "groq"
+default_model: "llama-3.3-70b-versatile"
