@@ -1,7 +1,4 @@
 #!/usr/bin/env npx tsx
-import { spawn, ChildProcess } from 'child_process';
-import * as path from 'path';
-import * as fs from 'fs';
 import fetch from 'node-fetch';
 
 const BASE_URL = process.env.API_URL || 'http://localhost:3000';
@@ -173,20 +170,6 @@ async function runTests() {
 }
 
 async function main() {
-  const testDbPath = path.resolve(process.cwd(), 'test-data.db');
-  try { fs.unlinkSync(testDbPath); } catch { /* OK */ }
-
-  const serverProcess: ChildProcess = spawn(
-    process.platform === 'win32' ? 'cmd' : 'npx',
-    process.platform === 'win32' ? ['/c', 'npx', 'tsx', 'src/index.ts'] : ['tsx', 'src/index.ts'],
-    { stdio: ['ignore', 'pipe', 'pipe'], cwd: process.cwd(), env: { ...process.env, DB_PATH: testDbPath } }
-  );
-  serverProcess.stdout?.on('data', (d: Buffer) => process.stdout.write(`[server] ${d}`));
-  serverProcess.stderr?.on('data', (d: Buffer) => process.stderr.write(`[server] ${d}`));
-
-  let serverError: any = null;
-  serverProcess.on('error', (e: Error) => { serverError = e; });
-
   try {
     await waitForServer(BASE_URL);
     console.log('Server is ready!\n');
@@ -194,15 +177,7 @@ async function main() {
     return exitCode;
   } catch (e: any) {
     console.error(`Failed: ${e.message}`);
-    if (serverError) console.error('Server error:', serverError.message);
     return 1;
-  } finally {
-    serverProcess.kill();
-    await Promise.race([
-      new Promise<void>(resolve => serverProcess.on('close', () => resolve())),
-      new Promise<void>(r => setTimeout(r, 2000))
-    ]);
-    try { fs.unlinkSync(testDbPath); } catch { /* OK */ }
   }
 }
 

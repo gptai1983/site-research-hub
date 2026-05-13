@@ -23,14 +23,7 @@ if ! command -v node &>/dev/null; then
   sudo apt-get install -y nodejs
 fi
 
-# ── 3. Hermes CLI ──
-if ! command -v hermes &>/dev/null; then
-  echo "==> Installing Hermes CLI..."
-  npm install -g @anthropic-ai/hermes-cli 2>/dev/null || \
-    echo "  [WARN] Hermes CLI install failed — sessions.start will not work until installed"
-fi
-
-# ── 4. Playwright ──
+# ── 3. Playwright ──
 if ! npx playwright --version &>/dev/null; then
   echo "==> Installing Playwright..."
   npm install -g playwright 2>/dev/null || true
