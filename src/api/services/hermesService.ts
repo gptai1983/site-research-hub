@@ -138,7 +138,6 @@ export function executeResearchTaskStream(
 
   const { provider: selectedProvider } = selectProvider(fullPrompt);
   const providerToUse = preferredProvider || selectedProvider;
-  const modelToUse = PROVIDER_MODEL_MAP[providerToUse]?.default || 'big-pickle';
   const apiKey = getApiKey(providerToUse);
   const baseUrl = PROVIDER_ENDPOINTS[providerToUse];
 

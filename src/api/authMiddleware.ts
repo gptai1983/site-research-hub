@@ -1,5 +1,5 @@
-import { t, Context } from './trpc';
-import { verifyToken, JwtPayload } from '../lib/auth';
+import { t } from './trpc';
+import { verifyToken } from '../lib/auth';
 import { TRPCError } from '@trpc/server';
 
 export const isAuthed = t.middleware(async ({ ctx, next }) => {
