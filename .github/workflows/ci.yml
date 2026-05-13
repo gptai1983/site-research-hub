@@ -25,19 +25,11 @@ jobs:
             package-lock.json
             frontend/package-lock.json
 
-      # Backend
       - name: Install backend deps
         run: npm ci
 
       - name: TypeScript check (backend)
         run: npx tsc --noEmit
-
-      - name: Run API tests
-        run: npm test
-        env:
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY || '' }}
-          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY || '' }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || '' }}
 
       # Frontend
       - name: Install frontend deps
@@ -56,25 +48,33 @@ jobs:
         working-directory: frontend
         run: npx vitest run
 
-      # Browser smoke test (with JWT auth)
-      - name: Install Playwright browsers
-        run: npx playwright install chromium
-
-      - name: Browser smoke test
+      # Integration tests — start server once, run all tests, kill
+      - name: Start server
         run: |
           npx tsx src/index.ts &
-          sleep 5
-
-          # Health check
+          echo $! > /tmp/server.pid
+          sleep 4
           curl -f http://localhost:3000/health
 
-          # Create first user and get token
-          TOKEN=$(curl -s -X POST http://localhost:3000/trpc/auth.setupFirstUser \
+      - name: Install Playwright Browsers
+        run: npx playwright install chromium
+
+      - name: API tests
+        run: npm test
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY || '' }}
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY || '' }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || '' }}
+
+      - name: Smoke test (JWT auth + browser)
+        run: |
+          # Login with user created by API tests
+          TOKEN=$(curl -s -X POST http://localhost:3000/trpc/auth.login \
             -H 'Content-Type: application/json' \
-            -d '{"email":"ci@test.dev","password":"cipass123"}' \
+            -d '{"email":"test@hermes.dev","password":"testpass123"}' \
             | python3 -c "import sys,json; print(json.load(sys.stdin)['result']['data']['token'])")
 
-          # Test authenticated endpoint
+          # Test browser navigate
           curl -f -s -X POST http://localhost:3000/trpc/browser.navigate \
             -H 'Content-Type: application/json' \
             -H "Authorization: Bearer $TOKEN" \
@@ -89,9 +89,12 @@ jobs:
             echo "ERROR: Unauthenticated request should return 401, got $STATUS"
             exit 1
           fi
-
-          kill %1
+          echo "All smoke tests passed"
         env:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY || '' }}
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY || '' }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || '' }}
+
+      - name: Cleanup server
+        if: always()
+        run: kill $(cat /tmp/server.pid) 2>/dev/null || true
